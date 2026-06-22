@@ -1,0 +1,32 @@
+[
+  {
+    "role": "user",
+    "content": "hello",
+    "timestamp": "2026-06-22T06:08:53.409191"
+  },
+  {
+    "role": "bot",
+    "content": "Hey there! Ready to chat and learn together?",
+    "timestamp": "2026-06-22T06:08:53.409362"
+  },
+  {
+    "role": "user",
+    "content": "hello",
+    "timestamp": "2026-06-22T06:09:29.795980"
+  },
+  {
+    "role": "bot",
+    "content": "Hello! 🍵 I'm Macha, your AI assistant. How can I help you today?",
+    "timestamp": "2026-06-22T06:09:29.796101"
+  },
+  {
+    "role": "user",
+    "content": "مرحبا",
+    "timestamp": "2026-06-22T06:09:29.809312"
+  },
+  {
+    "role": "bot",
+    "content": "Hey there! Ready to chat and learn together?",
+    "timestamp": "2026-06-22T06:09:29.809346"
+  }
+]
