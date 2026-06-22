@@ -221,5 +221,13 @@
       "I'm Macha and I learn from you! If my answer isn't right, let me know and I'll fix it 💚",
       "That's a great question! I'm still learning, but I'll do my best to help."
     ]
+  },
+  "learned_0": {
+    "patterns": [
+      "what is ai?"
+    ],
+    "responses": [
+      "AI is artificial intelligence"
+    ]
   }
 }
