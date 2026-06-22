@@ -483,17 +483,24 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({message: text})
             })
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            })
             .then(data => {
                 hideTyping();
                 const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                 document.getElementById('responseTime').textContent = elapsed + 's';
-                addMessage(data.response, 'bot', msgId, text, data.source);
+                if (data.response) {
+                    addMessage(data.response, 'bot', msgId, text, data.source);
+                } else {
+                    addMessage('⚠️ No response received. Please try again!', 'bot', msgId);
+                }
             })
             .catch(err => {
                 hideTyping();
+                console.error('Chat Error:', err);
                 addMessage('⚠️ Sorry, connection error. Please try again!', 'bot', msgId);
-                console.error(err);
             });
         }
 
@@ -543,10 +550,16 @@
         }
 
         function formatText(text) {
-            text = text.replace(/```(\w*)
-([\s\S]*?)```/g, '<div class="code-block">$2</div>');
-            text = text.replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.1);padding:2px 6px;border-radius:4px;">$1</code>');
-            text = text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color:#fff;text-decoration:underline;">$1</a>');
+            if (!text) return '';
+            // Escape HTML first
+            text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            // Code blocks
+            text = text.replace(/```([\w]*)\n([\s\S]*?)```/g, '<div class="code-block"><pre>$2</pre></div>');
+            text = text.replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.1);padding:2px 6px;border-radius:4px;font-family:monospace;">$1</code>');
+            // Links
+            text = text.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" style="color:#fff;text-decoration:underline;">$1</a>');
+            // Line breaks
+            text = text.replace(/\n/g, '<br>');
             return text;
         }
 

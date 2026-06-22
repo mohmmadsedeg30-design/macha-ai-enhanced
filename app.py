@@ -5,9 +5,10 @@ English-first | Arabic support | 100% Free
 Engines: Local Transformer + Local Pipeline + Ollama + Smart Fallback
 """
 
-import sys, os, json, torch, requests, re
+import sys, os, json, torch, requests, re, argparse, readline
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
+from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from macha.model.transformer import MachaModel, MachaTokenizer
@@ -104,56 +105,86 @@ def index():
     return render_template('chat.html')
 
 
-@app.route('/api/chat', methods=['POST'])
+@app.route('/api/chat', methods=['POST', 'GET'])
 def chat():
-    data = request.json
-    user_message = data.get('message', '').strip()
+    """Handle chat requests with better error handling"""
+    try:
+        if request.method == 'POST':
+            data = request.get_json()
+            if not data:
+                return jsonify({'error': 'Invalid JSON', 'response': 'Please send valid JSON data'}), 400
+            
+            user_message = data.get('message', '').strip()
+        else:
+            user_message = request.args.get('message', '').strip()
 
-    if not user_message:
-        return jsonify({'error': 'Empty message'}), 400
+        if not user_message:
+            return jsonify({'error': 'Empty message', 'response': 'Please enter a message'}), 400
 
-    response_text, source = unified_generate(user_message)
+        print(f"[{datetime.now()}] User: {user_message[:50]}...")
+        
+        response_text, source = unified_generate(user_message)
+        
+        result = {
+            'response': response_text,
+            'source': source,
+            'language': 'arabic' if is_arabic(user_message) else 'english',
+            'device': DEVICE,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        print(f"[{datetime.now()}] Response ({source}): {response_text[:50]}...")
+        return jsonify(result), 200
 
-    return jsonify({
-        'response': response_text,
-        'source': source,
-        'language': 'arabic' if is_arabic(user_message) else 'english',
-        'device': DEVICE
-    })
+    except Exception as e:
+        print(f"[ERROR] {str(e)}")
+        return jsonify({'error': str(e), 'response': 'Sorry, an error occurred. Please try again.'}), 500
 
 
 @app.route('/api/feedback', methods=['POST'])
 def feedback():
-    data = request.json
-    user_input = data.get('input', '')
-    correct_output = data.get('correct_output', '')
+    """Handle feedback with better error handling"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Invalid JSON'}), 400
+        
+        user_input = data.get('input', '')
+        correct_output = data.get('correct_output', '')
 
-    if not all([user_input, correct_output]):
-        return jsonify({'error': 'Missing data'}), 400
+        if not all([user_input, correct_output]):
+            return jsonify({'error': 'Missing data'}), 400
 
-    response_system.learn_response(user_input, correct_output)
+        response_system.learn_response(user_input, correct_output)
 
-    feedback_path = 'data/feedback.json'
-    existing = []
-    if os.path.exists(feedback_path):
-        with open(feedback_path, 'r', encoding='utf-8') as f:
-            existing = json.load(f)
+        feedback_path = 'data/feedback.json'
+        existing = []
+        if os.path.exists(feedback_path):
+            with open(feedback_path, 'r', encoding='utf-8') as f:
+                existing = json.load(f)
 
-    existing.append({
-        'input': user_input,
-        'wrong_output': data.get('wrong_output', ''),
-        'correct_output': correct_output
-    })
+        existing.append({
+            'input': user_input,
+            'wrong_output': data.get('wrong_output', ''),
+            'correct_output': correct_output,
+            'timestamp': datetime.now().isoformat()
+        })
 
-    os.makedirs('data', exist_ok=True)
-    with open(feedback_path, 'w', encoding='utf-8') as f:
-        json.dump(existing, f, ensure_ascii=False, indent=2)
+        os.makedirs('data', exist_ok=True)
+        with open(feedback_path, 'w', encoding='utf-8') as f:
+            json.dump(existing, f, ensure_ascii=False, indent=2)
 
-    return jsonify({'status': 'success', 'message': 'Learning from feedback!'})
+        print(f"[FEEDBACK] Learned: {user_input[:30]}...")
+        return jsonify({'status': 'success', 'message': 'Learning from feedback!'})
+    
+    except Exception as e:
+        print(f"[ERROR] Feedback: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/stats')
 def stats():
+    """Get system statistics"""
     feedback_path = 'data/feedback.json'
     feedback_count = 0
     if os.path.exists(feedback_path):
@@ -179,7 +210,65 @@ def stats():
     })
 
 
+# ============ CLI MODE ============
+
+def cli_chat():
+    """Interactive CLI chat mode for Termux"""
+    print("\n" + "="*60)
+    print("   🍵 Macha AI v2.0 - CLI Mode 🍵")
+    print("="*60)
+    print("\n💬 Type your messages (English or العربية)")
+    print("📝 Type 'exit' or 'quit' to leave")
+    print("📊 Type 'stats' to see system info")
+    print("="*60 + "\n")
+
+    while True:
+        try:
+            user_input = input("\n👤 You: ").strip()
+            
+            if user_input.lower() in ['exit', 'quit', 'bye']:
+                print("\n🍵 Goodbye! Thanks for chatting with Macha AI!")
+                break
+            
+            if user_input.lower() == 'stats':
+                print("\n📊 System Stats:")
+                print(f"   • Model Loaded: {model is not None}")
+                print(f"   • Device: {DEVICE}")
+                print(f"   • Ollama Available: {query_ollama('test') is not None}")
+                print(f"   • Language: Arabic & English")
+                continue
+            
+            if not user_input:
+                continue
+            
+            print("\n🧠 Macha is thinking...")
+            response, source = unified_generate(user_input)
+            
+            source_emoji = {
+                'macha-local': '🧠',
+                'ollama': '🦙',
+                'macha-fallback': '💬'
+            }.get(source, '🤖')
+            
+            print(f"\n{source_emoji} Macha: {response}")
+            print(f"   └─ Source: {source}")
+        
+        except KeyboardInterrupt:
+            print("\n\n🍵 Goodbye!")
+            break
+        except Exception as e:
+            print(f"\n❌ Error: {str(e)}")
+            print("   Please try again...")
+
+
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Macha AI v2.0')
+    parser.add_argument('--cli', action='store_true', help='Run in CLI mode (for Termux)')
+    parser.add_argument('--host', default='0.0.0.0', help='Server host (default: 0.0.0.0)')
+    parser.add_argument('--port', type=int, default=5000, help='Server port (default: 5000)')
+    
+    args = parser.parse_args()
+    
     print("=" * 50)
     print("   Macha AI v2.0 - Zero API Key")
     print("=" * 50)
@@ -191,4 +280,8 @@ if __name__ == '__main__':
     print("       1. Install: https://ollama.com")
     print("       2. Run: ollama run llama2")
     print("       3. Macha will auto-detect and use it!")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    
+    if args.cli:
+        cli_chat()
+    else:
+        app.run(host=args.host, port=args.port, debug=True)
